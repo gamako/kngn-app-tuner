@@ -1,0 +1,6 @@
+# Regression scenario: forwarding a platform event must happen inside an active GUI frame.
+step 12
+inject key_down SPACE
+step 1
+snapshot fb
+quit

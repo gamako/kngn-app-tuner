@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Tuner project architecture and design guide">
+  <title>Tuner 設計ガイド</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1118;
+      --panel: #151c27;
+      --panel-2: #1b2533;
+      --ink: #edf3ff;
+      --muted: #9daac0;
+      --line: #2a3a50;
+      --cyan: #78d9ff;
+      --green: #61e6a2;
+      --amber: #ffc866;
+      --violet: #b9a1ff;
+      --max: 1120px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 80% -10%, #1b2d43 0, transparent 42%), var(--bg);
+      color: var(--ink);
+      font: 16px/1.7 system-ui, -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    }
+    a { color: var(--cyan); }
+    code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
+    code { color: #c8eaff; }
+    .shell { width: min(calc(100% - 40px), var(--max)); margin: 0 auto; }
+    header { padding: 76px 0 48px; }
+    .eyebrow { color: var(--green); letter-spacing: .16em; text-transform: uppercase; font-size: .78rem; }
+    h1 { margin: 8px 0 12px; font-size: clamp(2.2rem, 6vw, 4.8rem); line-height: 1.05; letter-spacing: -.05em; }
+    h2 { margin: 0 0 16px; font-size: 1.65rem; }
+    h3 { margin: 0 0 8px; font-size: 1.05rem; }
+    p { margin: 0 0 14px; }
+    .lead { max-width: 760px; color: var(--muted); font-size: 1.12rem; }
+    nav {
+      position: sticky; top: 0; z-index: 2;
+      border-block: 1px solid var(--line);
+      background: rgba(13, 17, 24, .88);
+      backdrop-filter: blur(14px);
+    }
+    nav .shell { display: flex; gap: 18px; overflow-x: auto; padding: 10px 0; }
+    nav a { white-space: nowrap; color: var(--muted); text-decoration: none; font-size: .9rem; }
+    nav a:hover { color: var(--ink); }
+    section { padding: 58px 0; border-bottom: 1px solid var(--line); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .grid.two { grid-template-columns: repeat(2, 1fr); }
+    .card {
+      padding: 20px; border: 1px solid var(--line); border-radius: 16px;
+      background: linear-gradient(145deg, rgba(27, 37, 51, .94), rgba(21, 28, 39, .94));
+    }
+    .card p, .card li { color: var(--muted); }
+    .badge { display: inline-block; margin-bottom: 10px; padding: 2px 9px; border-radius: 999px; font-size: .74rem; color: var(--bg); background: var(--cyan); }
+    .badge.green { background: var(--green); }
+    .badge.amber { background: var(--amber); }
+    .badge.violet { background: var(--violet); }
+    .flow {
+      display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center;
+      gap: 8px; margin: 24px 0 12px;
+    }
+    .flow .node { min-height: 96px; padding: 14px 10px; display: grid; place-items: center; text-align: center; border: 1px solid var(--line); border-radius: 13px; background: var(--panel); }
+    .flow .node strong { display: block; font-size: .92rem; }
+    .flow .node small { display: block; color: var(--muted); font-size: .75rem; }
+    .flow .arrow { color: var(--cyan); text-align: center; font-size: 1.45rem; }
+    .flow-caption { color: var(--muted); text-align: center; font-size: .9rem; }
+    .architecture { overflow-x: auto; padding-bottom: 8px; }
+    .architecture svg { display: block; min-width: 780px; width: 100%; height: auto; }
+    .architecture text { font-family: system-ui, sans-serif; fill: #edf3ff; }
+    .architecture .sub { fill: #9daac0; font-size: 12px; }
+    .architecture .box { fill: #151c27; stroke: #2a3a50; stroke-width: 2; }
+    .architecture .box.input { stroke: #78d9ff; }
+    .architecture .box.core { stroke: #61e6a2; }
+    .architecture .box.ui { stroke: #b9a1ff; }
+    .architecture .arrow { stroke: #78d9ff; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    pre {
+      position: relative; overflow-x: auto; margin: 12px 0 0; padding: 16px 18px;
+      border: 1px solid var(--line); border-radius: 12px; background: #0a0e14; color: #d8e6f8;
+    }
+    .command { color: var(--green); }
+    .callout { margin-top: 18px; padding: 16px 18px; border-left: 3px solid var(--amber); background: rgba(255, 200, 102, .08); color: #e9d9b0; }
+    .pitch-figure { margin: 22px 0 0; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #0f151e; }
+    .pitch-figure figcaption { margin-bottom: 10px; color: var(--muted); font-size: .88rem; }
+    .pitch-figure svg { display: block; width: 100%; height: auto; }
+    .pitch-figure text { font-family: system-ui, sans-serif; fill: var(--muted); font-size: 12px; }
+    .pitch-figure .axis { stroke: #40536d; stroke-width: 1; }
+    .pitch-figure .wave { fill: none; stroke: var(--cyan); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .pitch-figure .guide { fill: none; stroke: var(--green); stroke-width: 2; stroke-dasharray: 5 5; }
+    .pitch-figure .peak { fill: var(--green); }
+    .formula { margin: 14px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: #0a0e14; color: #d8e6f8; overflow-x: auto; }
+    .formula code { white-space: nowrap; }
+    .example-table { margin-top: 18px; }
+    .example-table td:first-child { color: var(--ink); font-weight: 650; }
+    .legend-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; color: var(--muted); font-size: .82rem; }
+    .legend-mark { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; background: var(--cyan); }
+    .legend-mark.green { background: var(--green); }
+    .legend-mark.amber { background: var(--amber); }
+    .meter {
+      position: relative; min-height: 220px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: #111720;
+    }
+    .meter svg { position: absolute; inset: 12px 5% 0; width: 90%; height: 190px; }
+    .meter .arc { fill: none; stroke: #70839e; stroke-width: 8; stroke-linecap: round; stroke-dasharray: 3 14; }
+    .meter .zone { fill: none; stroke: var(--green); stroke-width: 12; stroke-linecap: round; }
+    .meter .needle { stroke: var(--green); stroke-width: 4; stroke-linecap: round; }
+    .meter .hub { fill: var(--green); }
+    .meter-label { position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: space-between; padding: 0 18px; color: var(--muted); font-size: .8rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--ink); font-size: .9rem; }
+    td { color: var(--muted); }
+    details { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+    details + details { margin-top: 10px; }
+    summary { cursor: pointer; padding: 14px 16px; color: var(--ink); font-weight: 650; }
+    details > div { padding: 0 16px 16px; color: var(--muted); }
+    footer { padding: 34px 0 60px; color: var(--muted); font-size: .9rem; }
+    @media (max-width: 760px) {
+      .shell { width: min(calc(100% - 28px), var(--max)); }
+      header { padding-top: 48px; }
+      .grid, .grid.two { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { transform: rotate(90deg); }
+      th, td { font-size: .9rem; }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell" id="top">
+    <div class="eyebrow">tuner / design guide</div>
+    <h1>音を受け取り、<br>中心を光らせる。</h1>
+    <p class="lead">Tunerは、Native・CLI・WebAssemblyで同じピッチ解析器を共有するクロマチック・ギターチューナーです。このページでは、音声が入力されてから画面の針になるまでを説明します。</p>
+  </header>
+
+  <nav>
+    <div class="shell">
+      <a href="#overview">全体像</a>
+      <a href="#architecture">データ経路</a>
+      <a href="#input">入力抽象化</a>
+      <a href="#analyzer">ピッチ解析</a>
+      <a href="#meter">GUIメーター</a>
+      <a href="#web">WebAssembly</a>
+      <a href="#test">検証</a>
+    </div>
+  </nav>
+
+  <main>
+    <section id="overview">
+      <div class="shell">
+        <h2>まず覚える3つの層</h2>
+        <div class="grid">
+          <article class="card">
+            <span class="badge">INPUT</span>
+            <h3>音声を取り込む</h3>
+            <p>マイク、WAV、テスト用サイン波を、モノラルの <code>f32</code> サンプル列にそろえます。</p>
+          </article>
+          <article class="card">
+            <span class="badge green">CORE</span>
+            <h3>音程を判定する</h3>
+            <p><code>pitch.Analyzer</code> が自己相関から周波数、音名、cents、信頼度を求めます。</p>
+          </article>
+          <article class="card">
+            <span class="badge violet">VIEW</span>
+            <h3>結果を見せる</h3>
+            <p>GUIは同じ判定結果を、音名・Hz・半円スケール・針・状態色として表示します。</p>
+          </article>
+        </div>
+        <div class="callout"><strong>設計の中心：</strong>入力方式を増やしても、ピッチ解析器とGUIを複製しない。入力だけを差し替え、中央のPCM経路へ合流させます。</div>
+      </div>
+    </section>
+
+    <section id="architecture">
+      <div class="shell">
+        <h2>データ経路</h2>
+        <p class="lead">3種類の入力は入口こそ異なりますが、リングバッファの後ろは共通です。</p>
+        <div class="architecture">
+          <svg viewBox="0 0 1000 330" role="img" aria-label="Native、CLI、WebAssemblyの入力経路図">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#78d9ff"/></marker>
+            </defs>
+            <rect class="box input" x="20" y="25" width="170" height="58" rx="12"/><text x="105" y="51" text-anchor="middle">Native microphone</text><text class="sub" x="105" y="70" text-anchor="middle">kit.audio</text>
+            <rect class="box input" x="20" y="136" width="170" height="58" rx="12"/><text x="105" y="162" text-anchor="middle">WAV / tone / CLI</text><text class="sub" x="105" y="181" text-anchor="middle">testable source</text>
+            <rect class="box input" x="20" y="247" width="170" height="58" rx="12"/><text x="105" y="273" text-anchor="middle">Browser microphone</text><text class="sub" x="105" y="292" text-anchor="middle">getUserMedia</text>
+            <rect class="box input" x="245" y="136" width="170" height="58" rx="12"/><text x="330" y="162" text-anchor="middle">Input facade</text><text class="sub" x="330" y="181" text-anchor="middle">input_native / web</text>
+            <rect class="box core" x="470" y="136" width="170" height="58" rx="12"/><text x="555" y="162" text-anchor="middle">Audio ring</text><text class="sub" x="555" y="181" text-anchor="middle">fixed SPSC buffer</text>
+            <rect class="box core" x="695" y="136" width="170" height="58" rx="12"/><text x="780" y="162" text-anchor="middle">pitch.Analyzer</text><text class="sub" x="780" y="181" text-anchor="middle">frequency / cents</text>
+            <rect class="box ui" x="830" y="247" width="150" height="58" rx="12"/><text x="905" y="273" text-anchor="middle">Runtime(App)</text><text class="sub" x="905" y="292" text-anchor="middle">GUI / Wasm frame</text>
+            <path class="arrow" d="M190 54 C220 54 215 165 245 165"/><path class="arrow" d="M190 165 H245"/><path class="arrow" d="M190 276 C220 276 215 165 245 165"/>
+            <path class="arrow" d="M415 165 H470"/><path class="arrow" d="M640 165 H695"/><path class="arrow" d="M780 194 C780 240 850 220 905 247"/>
+          </svg>
+        </div>
+        <p class="flow-caption">入力アダプターはイベント/RT境界を担当し、解析と描画はアプリケーションスレッドで行います。</p>
+      </div>
+    </section>
+
+    <section id="input">
+      <div class="shell">
+        <h2>入力抽象化</h2>
+        <div class="grid two">
+          <article class="card">
+            <span class="badge">NATIVE</span>
+            <h3><code>src/input_native.zig</code></h3>
+            <p>kngnの <code>kit.audio.requestCapturePermission()</code> と <code>openCapture()</code> を使います。音声コールバックは固定リングバッファへサンプルを追加するだけです。</p>
+            <p>マイク許可の状態は <code>requesting</code>、<code>ready</code>、<code>denied</code> などに変換してGUIへ渡します。</p>
+          </article>
+          <article class="card">
+            <span class="badge">WASM</span>
+            <h3><code>src/input_web.zig</code></h3>
+            <p>ブラウザ側から固定バッファへPCMを受け取り、Nativeと同じリングバッファへ流します。ブラウザAPIの非同期処理は <code>web/tuner.html</code> が担当します。</p>
+            <p>Wasmの公開境界は <code>tuner_capture_*</code> 関数に限定しています。</p>
+          </article>
+        </div>
+        <div class="flow">
+          <div class="node"><strong>callback / Worklet</strong><small>音声を受け取る</small></div><div class="arrow">→</div>
+          <div class="node"><strong>固定バッファ</strong><small>境界を短くする</small></div><div class="arrow">→</div>
+          <div class="node"><strong>リングバッファ</strong><small>解析側へ受け渡す</small></div>
+        </div>
+        <div class="callout"><strong>RTの約束：</strong>音声コールバックにアロケーション、ロック、ファイルI/O、GUI操作を入れません。サンプルをリングへ入れたら、解析は別のアプリケーションスレッドで行います。</div>
+      </div>
+    </section>
+
+    <section id="analyzer">
+      <div class="shell">
+        <h2>ピッチ解析</h2>
+        <p><code>src/pitch.zig</code> の <code>Analyzer</code> は、録音を「音名」と「基準音からのずれ」に変換します。ここでは、低いE弦を例に処理を追います。</p>
+        <div class="grid">
+          <article class="card"><span class="badge green">1 / 8192 samples</span><h3>波形をためる</h3><p>入力はモノラルの <code>f32</code> サンプルです。8192サンプルの窓を作り、2048サンプルずつ重ねながら更新します。</p></article>
+          <article class="card"><span class="badge green">2 / lag</span><h3>周期を探す</h3><p>波形を少しずつずらして、元の波形とどれだけ似ているかを調べます。最も似るずらし量が周期です。</p></article>
+          <article class="card"><span class="badge green">3 / cents</span><h3>音名とずれへ</h3><p>周期からHzを求め、12平均律で最も近い音名を選び、基準周波数との差をcentsにします。</p></article>
+        </div>
+
+        <div class="grid two">
+          <figure class="pitch-figure">
+            <figcaption>図1：音の高さは、波形の1周期が短いほど高くなる</figcaption>
+            <svg viewBox="0 0 520 190" role="img" aria-label="E2の波形と周期を示す図">
+              <line class="axis" x1="20" y1="95" x2="500" y2="95"/>
+              <path class="wave" d="M20 95 C35 32 57 32 72 95 S109 158 124 95 S161 32 176 95 S213 158 228 95 S265 32 280 95 S317 158 332 95 S369 32 384 95 S421 158 436 95 S473 32 488 95"/>
+              <line class="guide" x1="72" y1="24" x2="72" y2="168"/><line class="guide" x1="176" y1="24" x2="176" y2="168"/>
+              <path class="guide" d="M72 28 H176 M72 28 l8 -5 M72 28 l8 5 M176 28 l-8 -5 M176 28 l-8 5"/>
+              <circle class="peak" cx="72" cy="32" r="5"/><circle class="peak" cx="176" cy="32" r="5"/>
+              <text x="124" y="20" text-anchor="middle">1周期 ≈ 1 / 82.4秒</text>
+              <text x="20" y="182">時間</text><text x="430" y="182">サンプル列</text>
+            </svg>
+            <div class="legend-row"><span><i class="legend-mark"></i>音声波形</span><span><i class="legend-mark green"></i>周期の境界</span></div>
+          </figure>
+          <figure class="pitch-figure">
+            <figcaption>図2：48kHzでE2を測ると、周期は約583サンプル</figcaption>
+            <svg viewBox="0 0 520 190" role="img" aria-label="サンプルレートと周期の関係を示す図">
+              <line class="axis" x1="38" y1="145" x2="490" y2="145"/>
+              <line class="axis" x1="38" y1="30" x2="38" y2="145"/>
+              <g class="axis"><line x1="78" y1="140" x2="78" y2="150"/><line x1="178" y1="140" x2="178" y2="150"/><line x1="278" y1="140" x2="278" y2="150"/><line x1="378" y1="140" x2="378" y2="150"/><line x1="478" y1="140" x2="478" y2="150"/></g>
+              <path class="wave" d="M48 102 C62 42 78 42 92 102 S122 162 136 102 S166 42 180 102 S210 162 224 102 S254 42 268 102 S298 162 312 102 S342 42 356 102 S386 162 400 102 S430 42 444 102 S474 162 488 102"/>
+              <path class="guide" d="M78 26 V145 M178 26 V145 M78 42 H178"/>
+              <text x="128" y="36" text-anchor="middle">約583 samples</text>
+              <text x="38" y="20">振幅</text><text x="450" y="174">sample index</text>
+            </svg>
+            <div class="formula"><code>frequency = sample_rate / period<br>82.4Hz ≈ 48000 / 583</code></div>
+          </figure>
+        </div>
+
+        <h3>自己相関は「同じ形がもう一度現れる場所」を探す</h3>
+        <p>Analyzerは、入力を <code>lag</code> サンプルずらして積を足します。周期と同じlagでは、山と山・谷と谷が重なるためスコアが大きくなります。コードでは60〜500Hzに対応するlagだけを探索します。</p>
+        <figure class="pitch-figure">
+          <figcaption>図3：lagごとの類似度。最初の大きなピークが周期候補</figcaption>
+          <svg viewBox="0 0 1000 220" role="img" aria-label="自己相関スコアのピークを示す図">
+            <line class="axis" x1="48" y1="175" x2="960" y2="175"/><line class="axis" x1="48" y1="28" x2="48" y2="175"/>
+            <path class="wave" d="M48 169 C92 168 110 159 135 165 S180 171 205 160 S235 45 263 52 S292 163 324 165 S365 170 390 156 S420 72 447 82 S476 166 515 167 S560 171 586 158 S616 102 640 108 S673 169 705 168 S750 170 778 160 S808 127 832 132 S862 169 900 168 S932 170 960 168"/>
+            <line class="guide" x1="263" y1="28" x2="263" y2="175"/><circle class="peak" cx="263" cy="52" r="7"/>
+            <text x="263" y="20" text-anchor="middle">best_lag ≈ 583</text><text x="50" y="198">探索開始</text><text x="900" y="198">lag</text><text x="12" y="35">score</text>
+          </svg>
+          <div class="legend-row"><span><i class="legend-mark"></i>normalized correlation</span><span><i class="legend-mark green"></i>選ばれたピーク</span></div>
+        </figure>
+
+        <div class="grid two">
+          <article class="card">
+            <h3>なぜピークの位置を補正するのか</h3>
+            <p>実際の周期が整数サンプルにならないことがあります。そこで、ピークの左右3点 <code>y0, y1, y2</code> を使って放物線の頂点を近似し、<code>best_lag</code> に小数の補正を加えます。</p>
+            <div class="formula"><code>refined_lag = best_lag + correction<br>frequency = sample_rate / refined_lag</code></div>
+          </article>
+          <article class="card">
+            <h3>信頼できない結果は表示しない</h3>
+            <p>まずRMSで音量を確認し、<code>rms &lt; 0.008</code> なら <code>no_signal</code>。相関の信頼度が <code>0.18</code> 未満、または周波数が60〜500Hzの範囲外なら <code>unstable</code> にします。</p>
+            <p>このため、無音や雑音を無理に音名として表示しません。</p>
+          </article>
+        </div>
+
+        <h3>周波数から音名とcentsを求める</h3>
+        <p>まず12平均律の最近傍MIDIノートを選び、そのノートの基準周波数と比較します。1半音は100 centsです。</p>
+        <div class="formula"><code>midi_float = 69 + 12 × log2(frequency / 440)<br>target = 440 × 2^((midi - 69) / 12)<br>cents = 1200 × log2(frequency / target)</code></div>
+        <table class="example-table">
+          <thead><tr><th>入力例</th><th>最近傍の音</th><th>計算結果</th><th>メーター</th></tr></thead>
+          <tbody>
+            <tr><td>82.4069Hz</td><td>E2</td><td>基準82.4069Hzとの差 0 cents</td><td>中央・緑</td></tr>
+            <tr><td>82.8843Hz</td><td>E2</td><td>基準より約 +10 cents</td><td>少しSHARP側</td></tr>
+            <tr><td>81.9323Hz</td><td>E2</td><td>基準より約 -10 cents</td><td>少しFLAT側</td></tr>
+            <tr><td>90Hz</td><td>F#2</td><td>F#2基準92.4986Hzより約 -47.4 cents</td><td>大きくFLAT側・アンバー</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th>判定状態</th><th>意味</th><th>GUI表示</th></tr></thead>
+          <tbody>
+            <tr><td><code>detected</code></td><td>十分な信号と信頼度で音程を判定できた</td><td>音名、周波数、cents、色付きの針</td></tr>
+            <tr><td><code>unstable</code></td><td>信号はあるが周期または信頼度が不十分</td><td>Listening... と控えめな針</td></tr>
+            <tr><td><code>no_signal</code></td><td>RMSがしきい値未満で音を検出できない</td><td>Play a note と待機状態</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="meter">
+      <div class="shell">
+        <h2>GUIメーターの設計</h2>
+        <div class="grid two">
+          <div class="meter" aria-label="半円形のチューナーメーターの模式図">
+            <svg viewBox="0 0 500 210" aria-hidden="true">
+              <path class="arc" d="M55 175 A195 195 0 0 1 445 175"/>
+              <path class="zone" d="M237 37 A195 195 0 0 1 263 37"/>
+              <line class="needle" x1="250" y1="175" x2="246" y2="43"/>
+              <circle class="hub" cx="250" cy="175" r="8"/>
+            </svg>
+            <div class="meter-label"><span>FLAT</span><span>0</span><span>SHARP</span></div>
+          </div>
+          <article class="card">
+            <span class="badge violet">VIEW</span>
+            <h3>実用性を先に、演出は短く</h3>
+            <p>針は0.22係数で追従させ、入力の揺れをそのまま画面へ出さないようにしています。</p>
+            <p>中央の正確ゾーンは緑、近傍はアンバー、遠い位置は暗い目盛りです。正確になった瞬間だけ中心の発光が目立ちます。</p>
+            <p>描画は <code>Context.custom</code> と <code>DrawList</code> の少数の線・矩形で構成し、全画素ループやRT経路の処理は追加していません。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="web">
+      <div class="shell">
+        <h2>WebAssembly版の境界</h2>
+        <p>ブラウザのマイク許可は非同期で、NativeのようにWasm内部から直接取得できません。そのため、ブラウザ側とWasm側を小さなABIで接続しています。</p>
+        <div class="grid">
+          <article class="card"><span class="badge">1</span><h3>許可を取る</h3><p><code>getUserMedia</code> でモノラル・エコー抑制なしの入力を要求します。</p></article>
+          <article class="card"><span class="badge">2</span><h3>Workletで集める</h3><p><code>AudioWorklet</code> と <code>SharedArrayBuffer</code> のリングで音声処理とメインスレッドを分離します。</p></article>
+          <article class="card"><span class="badge">3</span><h3>Wasmへsubmit</h3><p>固定バッファへコピーして <code>tuner_capture_submit</code> を呼び、共通リングへ合流させます。</p></article>
+        </div>
+        <pre><code>tuner_capture_buffer_ptr()
+tuner_capture_buffer_len()
+tuner_capture_get_state()
+tuner_capture_set_state(code)
+tuner_capture_submit(frames, channels, sample_rate)</code></pre>
+        <div class="callout"><strong>ブラウザでの注意：</strong><code>file://</code> ではマイク入力を動かせません。<code>zig build package-web</code> 後、COOP/COEPヘッダーを付けたサーバーで配信してください。</div>
+      </div>
+    </section>
+
+    <section id="test">
+      <div class="shell">
+        <h2>検証方法</h2>
+        <div class="grid two">
+          <article class="card">
+            <h3>自動テストとビルド</h3>
+            <pre><code class="command">zig build test
+zig build gate-web
+zig build package-web</code></pre>
+            <p>ピッチ判定、リングバッファ、入力状態、Wasmパッケージを検証します。</p>
+          </article>
+          <article class="card">
+            <h3>決定的なGUI確認</h3>
+            <pre><code class="command">KNGN_HEADLESS=1 \
+KNGN_HARNESS_SCRIPT=tests/gui-events.txt \
+KNGN_HARNESS_OUT=/tmp/tuner-harness \
+zig build run-tuner -- --input tone --frequency 82.4069</code></pre>
+            <p>テスト音ならマイク許可に依存せず、メーターの中央一致やずれた針を確認できます。</p>
+          </article>
+        </div>
+        <details>
+          <summary>実機マイクを確認するとき</summary>
+          <div><code>zig build run-tuner</code> を実行します。GUIはデフォルトでマイク入力です。macOSではシステム設定の「プライバシーとセキュリティ → マイク」で許可し、ギターの音を入力します。</div>
+        </details>
+        <details>
+          <summary>問題をWAVで再現するとき</summary>
+          <div>CLIの <code>--input file path/to/input.wav</code> を使います。マイク依存のタイミングや権限を切り離し、同じ <code>pitch.Analyzer</code> を再現可能な入力で確認できます。</div>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="shell">
+    <p><a href="design-guide.html">English version</a> · <a href="../README.ja.md">README（日本語）</a> · <a href="../README.md">README（English）</a> · <a href="#top">ページ上部へ戻る</a></p>
+    <p>Source: <a href="../src/main.zig">src/main.zig</a> · <a href="../src/input.zig">src/input.zig</a> · <a href="../src/pitch.zig">src/pitch.zig</a> · <a href="../web/tuner.html">web/tuner.html</a></p>
+  </footer>
+</body>
+</html>

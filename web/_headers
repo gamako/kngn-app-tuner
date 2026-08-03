@@ -1,0 +1,19 @@
+# Cross-origin isolation is required by the browser microphone bridge.
+/tuner.html
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+/tuner
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# Same-origin resources loaded by tuner.html under COEP: require-corp.
+/kngn.js
+  Cross-Origin-Resource-Policy: same-origin
+
+/kngn-worklet.js
+  Cross-Origin-Resource-Policy: same-origin
+
+/tuner.wasm
+  Cross-Origin-Resource-Policy: same-origin
+  Content-Type: application/wasm

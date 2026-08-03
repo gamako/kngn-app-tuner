@@ -119,7 +119,7 @@ pub fn build(b: *std.Build) void {
         .assets = .{
             .js = dep.path("web/kngn.js"),
             .worklet = dep.path("web/kngn-worklet.js"),
-            .headers = dep.path("web/deploy/_headers"),
+            .headers = b.path("web/_headers"),
             .netlify = dep.path("web/deploy/netlify.toml"),
             .serve_script = dep.path("web/deploy/serve-coop-coep.py"),
             .packer = dep.path("cli/pack-single-html.zig"),

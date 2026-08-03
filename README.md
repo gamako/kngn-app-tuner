@@ -5,6 +5,9 @@
 An external chromatic guitar tuner prototype built against the neighbouring `kngn`
 checkout.
 
+Live sample: [Open the WebAssembly tuner](https://kngn-app-tuner.pages.dev/tuner.html)
+(`https` is required for browser microphone access).
+
 ## Commands
 
 ```sh

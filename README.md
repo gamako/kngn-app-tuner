@@ -10,13 +10,13 @@ Live sample: [Open the WebAssembly tuner](https://kngn-app-tuner.pages.dev/tuner
 
 ## Checkout layout
 
-The tuner is an external consumer of kngn and expects the two checkouts to be
-siblings:
+The tuner is an external consumer of [kngn](https://github.com/gamako/kngn).
+Clone the two repositories as siblings:
 
 ```text
-video-proto/
+workspace/
 ├── kngn/
-└── tuner/
+└── kngn-app-tuner/
 ```
 
 `build.zig.zon` resolves the kngn dependency through `.path = "../kngn"`, and
@@ -24,16 +24,15 @@ video-proto/
 the sibling layout and keep those helper files synchronized with the adjacent
 kngn checkout.
 
-From the `tuner/` directory, use the kngn checkout's Zig environment when
-building:
+Install Zig 0.16.0 and the platform dependencies described in the [kngn build
+documentation](https://github.com/gamako/kngn/blob/main/docs/build.md) before
+building. Once the development environment is ready, run the commands below
+from the `kngn-app-tuner/` directory:
 
 ```sh
-direnv exec ../kngn zig build test
-direnv exec ../kngn zig build run-tuner
+zig build test
+zig build run-tuner
 ```
-
-If the kngn direnv environment is already active, the `direnv exec ../kngn`
-prefix can be omitted.
 
 ## Commands
 

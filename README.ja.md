@@ -9,24 +9,22 @@
 
 ## ディレクトリ配置
 
-このプロジェクトはkngnを外部依存として利用するため、2つのチェックアウトを兄弟ディレクトリに配置します。
+このプロジェクトは[kngn](https://github.com/gamako/kngn)を外部依存として利用するため、2つのリポジトリを兄弟ディレクトリにcloneします。
 
 ```text
-video-proto/
+workspace/
 ├── kngn/
-└── tuner/
+└── kngn-app-tuner/
 ```
 
 `build.zig.zon` は `.path = "../kngn"` で隣のkngnを参照します。また、`build_helpers/` にはkngnからvendorした外部consumer用ヘルパーが含まれています。配置関係を維持し、ヘルパーは隣接するkngnのものと同期させてください。
 
-`tuner/` ディレクトリから、kngnのZig環境を使ってビルドします。
+ビルド前に、Zig 0.16.0と、[kngnのビルドドキュメント](https://github.com/gamako/kngn/blob/main/docs/build.md)に記載されたプラットフォーム依存関係をセットアップしてください。環境の準備が完了したら、`kngn-app-tuner/` ディレクトリで通常の `zig build` を実行します。
 
 ```sh
-direnv exec ../kngn zig build test
-direnv exec ../kngn zig build run-tuner
+zig build test
+zig build run-tuner
 ```
-
-kngnのdirenv環境がすでに有効な場合は、`direnv exec ../kngn` を省略できます。
 
 ## 概要
 

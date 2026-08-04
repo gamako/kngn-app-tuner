@@ -7,6 +7,27 @@
 サンプルページ: [WebAssembly版チューナーを開く](https://kngn-app-tuner.pages.dev/tuner.html)
 （ブラウザのマイク入力には `https` が必要です）。
 
+## ディレクトリ配置
+
+このプロジェクトはkngnを外部依存として利用するため、2つのチェックアウトを兄弟ディレクトリに配置します。
+
+```text
+video-proto/
+├── kngn/
+└── tuner/
+```
+
+`build.zig.zon` は `.path = "../kngn"` で隣のkngnを参照します。また、`build_helpers/` にはkngnからvendorした外部consumer用ヘルパーが含まれています。配置関係を維持し、ヘルパーは隣接するkngnのものと同期させてください。
+
+`tuner/` ディレクトリから、kngnのZig環境を使ってビルドします。
+
+```sh
+direnv exec ../kngn zig build test
+direnv exec ../kngn zig build run-tuner
+```
+
+kngnのdirenv環境がすでに有効な場合は、`direnv exec ../kngn` を省略できます。
+
 ## 概要
 
 ピッチ判定ロジックはプラットフォームに依存せず、コマンドライン、WAVファイル、Nativeマイク入力、WebAssemblyのブラウザマイク入力で共通利用します。

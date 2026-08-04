@@ -8,6 +8,33 @@ checkout.
 Live sample: [Open the WebAssembly tuner](https://kngn-app-tuner.pages.dev/tuner.html)
 (`https` is required for browser microphone access).
 
+## Checkout layout
+
+The tuner is an external consumer of kngn and expects the two checkouts to be
+siblings:
+
+```text
+video-proto/
+├── kngn/
+└── tuner/
+```
+
+`build.zig.zon` resolves the kngn dependency through `.path = "../kngn"`, and
+`build_helpers/` contains the consumer build helpers vendored from kngn. Keep
+the sibling layout and keep those helper files synchronized with the adjacent
+kngn checkout.
+
+From the `tuner/` directory, use the kngn checkout's Zig environment when
+building:
+
+```sh
+direnv exec ../kngn zig build test
+direnv exec ../kngn zig build run-tuner
+```
+
+If the kngn direnv environment is already active, the `direnv exec ../kngn`
+prefix can be omitted.
+
 ## Commands
 
 ```sh

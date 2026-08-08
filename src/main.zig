@@ -117,6 +117,12 @@ const App = struct {
             return;
         }
 
+        // Both are no-ops on native. drainCaptureIfActive runs the capture callback
+        // that fills the ring below; poll advances the wasm permission/open state
+        // machine (see input_web.zig).
+        kit.audio.drainCaptureIfActive();
+        input.poll(&self.input);
+
         const source_rate = self.input.sampleRate();
         if (source_rate != self.analyzer.sample_rate) {
             self.analyzer = pitch.Analyzer.init(source_rate, pitch.default_a4);

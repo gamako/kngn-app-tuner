@@ -21,6 +21,12 @@ pub fn bind(input: *Input) void {
     if (comptime builtin.cpu.arch.isWasm()) backend.bind(input);
 }
 
+/// Advance the wasm permission/open state machine one step. A no-op on native, where
+/// `Input.init` already settles synchronously (see `input_native.zig`).
+pub fn poll(input: *Input) void {
+    if (comptime builtin.cpu.arch.isWasm()) input.poll();
+}
+
 pub fn enableWasmExports() void {
     backend.Input.enableWasmExports();
 }

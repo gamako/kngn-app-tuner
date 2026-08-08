@@ -83,8 +83,9 @@ pub fn build(b: *std.Build) void {
 
     // ----- wasm web package -----
     // The wasm app is reactor-style: kngn_init/kngn_frame are driven by browser rAF.
-    // Microphone capture remains an experimental tuner-side host boundary for now; the
-    // shipping package uses the tone source and keeps the capture exports available.
+    // Microphone capture on wasm goes through kngn's shared-memory AudioWorklet capture
+    // path (ADR-027), which requires audio=worklet_shared and therefore COOP/COEP
+    // (single_html is unavailable — see docs/wasm-deploy.md).
     const wasm_optimize: std.builtin.OptimizeMode = if (b.user_input_options.contains("optimize") or b.release_mode != .off)
         optimize
     else
@@ -92,6 +93,12 @@ pub fn build(b: *std.Build) void {
     const wasi_target_query = std.Target.Query{
         .cpu_arch = .wasm32,
         .os_tag = .wasi,
+    };
+    // worklet_shared needs atomics + bulk_memory for the shared-memory AudioWorklet path.
+    const wasi_shared_target_query = std.Target.Query{
+        .cpu_arch = .wasm32,
+        .os_tag = .wasi,
+        .cpu_features_add = std.Target.wasm.featureSet(&.{ .atomics, .bulk_memory }),
     };
     const wasm_dep = b.dependency("kngn", .{
         .target = b.resolveTargetQuery(wasi_target_query),
@@ -101,16 +108,24 @@ pub fn build(b: *std.Build) void {
     var wasm_specs = [_]helpers.WasmAppSpec{
         .{
             .name = "tuner",
-            .target_query = wasi_target_query,
+            .target_query = wasi_shared_target_query,
             .app_source = b.path("src/main.zig"),
             .wasm_root_source = b.path("src/wasm_root.zig"),
             .wasm_root_import_name = "tuner_app",
             .imports = &.{.{ .name = "kit", .module = wasm_dep.module("kit") }},
-            .audio = .none,
+            .audio = .worklet_shared,
+            .capture = true,
+            .shared_memory = true,
+            .import_memory = true,
+            .export_memory = false,
+            .initial_memory = 16 * 1024 * 1024,
+            .max_memory = 64 * 1024 * 1024,
+            .stack_size = 2 * 1024 * 1024,
+            .export_symbol_names = &.{"__stack_pointer"},
             .html_source = b.path("web/tuner.html"),
             .html_install_path = "web/tuner.html",
-            .single_html = true,
-            .single_html_basename = "tuner",
+            // worklet_shared requires COOP/COEP, which single_html cannot provide.
+            .single_html = false,
         },
     };
 
@@ -130,16 +145,13 @@ pub fn build(b: *std.Build) void {
         .create_package_step = true,
         .package_step_name = "package-web",
         .package_step_description = "Package tuner wasm multi-file web bundle to zig-out/web/",
-        .create_single_package_step = true,
-        .single_package_step_name = "package-web-single",
-        .single_package_step_description = "Package tuner single-file HTML to zig-out/web/",
+        // No single-file package: the only wasm app is worklet_shared (COOP/COEP-only)
+        // for real microphone capture, and worklet_shared cannot be single_html.
     });
 
     const gate_web_step = b.step("gate-web", "Web gate: package tuner wasm bundles");
     const package_web = b.top_level_steps.get("package-web") orelse @panic("package-web step missing");
-    const package_web_single = b.top_level_steps.get("package-web-single") orelse @panic("package-web-single step missing");
     gate_web_step.dependOn(&package_web.step);
-    gate_web_step.dependOn(&package_web_single.step);
 }
 
 fn addConsumerExe(

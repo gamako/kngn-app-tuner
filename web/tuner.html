@@ -32,165 +32,19 @@
   </style>
 </head>
 <body data-wasm="tuner.wasm"
-      data-audio-transport="none"
-      data-shared="0">
+      data-audio-transport="worklet_shared"
+      data-capture="true"
+      data-shared="1">
   <canvas id="kngn-canvas" tabindex="0"></canvas>
   <div id="kngn-error"></div>
 
   <!--
-    This is an external-consumer experiment. It observes the existing kngn.js boot
-    without changing kngn: WebAssembly.instantiate captures the instance and the first
-    requestAnimationFrame runs after kngn_init, so the tuner app is already bound to its
-    capture exports when the browser microphone starts.
+    Microphone capture goes through kngn's shared-memory AudioWorklet capture path
+    (ADR-027 in the kngn repository): kngn.js reads data-capture and wires
+    getUserMedia, the AudioWorkletNode input and the capture ring itself. This page
+    needs no capture-specific script of its own, and requires COOP/COEP (see
+    scripts/serve-web.py / web/deploy/serve-coop-coep.py).
   -->
-  <script>
-    (() => {
-      const originalInstantiate = WebAssembly.instantiate;
-      const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
-      let wasmInstance = null;
-      let captureStarted = false;
-
-      const workletSource = `
-        class TunerCaptureProcessor extends AudioWorkletProcessor {
-          constructor(options) {
-            super();
-            const capacity = options.processorOptions.capacity;
-            const buffer = options.processorOptions.buffer;
-            this.header = new Int32Array(buffer, 0, 2);
-            this.samples = new Float32Array(buffer, 8, capacity);
-            this.capacity = capacity;
-          }
-
-          process(inputs) {
-            const channel = inputs[0] && inputs[0][0];
-            if (!channel) return true;
-
-            let write = Atomics.load(this.header, 0);
-            const read = Atomics.load(this.header, 1);
-            for (let i = 0; i < channel.length; i++) {
-              const next = (write + 1) % this.capacity;
-              if (next === read) break;
-              this.samples[write] = channel[i];
-              write = next;
-            }
-            Atomics.store(this.header, 0, write);
-            return true;
-          }
-        }
-        registerProcessor("tuner-capture", TunerCaptureProcessor);
-      `;
-
-      function setState(code) {
-        if (wasmInstance && typeof wasmInstance.exports.tuner_capture_set_state === "function") {
-          wasmInstance.exports.tuner_capture_set_state(code);
-        }
-      }
-
-      function submitFromRing(memory, context, header, samples, capacity) {
-        if (!wasmInstance) return;
-        let read = Atomics.load(header, 1);
-        const write = Atomics.load(header, 0);
-        const ptr = wasmInstance.exports.tuner_capture_buffer_ptr();
-        const max = wasmInstance.exports.tuner_capture_buffer_len();
-        const wasmSamples = new Float32Array(memory.buffer, ptr, max);
-
-        while (read !== write) {
-          let count = 0;
-          while (read !== write && count < max) {
-            wasmSamples[count++] = samples[read];
-            read = (read + 1) % capacity;
-          }
-          const accepted = wasmInstance.exports.tuner_capture_submit(count, 1, context.sampleRate | 0);
-          if (accepted === 0) break;
-        }
-        Atomics.store(header, 1, read);
-      }
-
-      async function startCapture() {
-        if (captureStarted) return;
-        captureStarted = true;
-        if (!wasmInstance) return;
-        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
-          setState(4);
-          return;
-        }
-        if (typeof SharedArrayBuffer === "undefined" || !globalThis.crossOriginIsolated) {
-          console.error("tuner capture requires a cross-origin-isolated HTTP origin");
-          setState(4);
-          return;
-        }
-
-        let stream = null;
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              channelCount: 1,
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-            },
-          });
-
-          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-          if (!AudioContextClass || typeof AudioWorkletNode === "undefined") {
-            setState(4);
-            stream.getTracks().forEach((track) => track.stop());
-            return;
-          }
-
-          const context = new AudioContextClass({ latencyHint: "interactive" });
-          const capacity = 65536;
-          const shared = new SharedArrayBuffer(8 + capacity * Float32Array.BYTES_PER_ELEMENT);
-          const header = new Int32Array(shared, 0, 2);
-          const samples = new Float32Array(shared, 8, capacity);
-          const moduleUrl = URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" }));
-          await context.audioWorklet.addModule(moduleUrl);
-          URL.revokeObjectURL(moduleUrl);
-
-          const source = context.createMediaStreamSource(stream);
-          const node = new AudioWorkletNode(context, "tuner-capture", {
-            processorOptions: { buffer: shared, capacity },
-          });
-          const mute = context.createGain();
-          mute.gain.value = 0;
-          source.connect(node);
-          node.connect(mute);
-          mute.connect(context.destination);
-
-          const drain = () => {
-            if (wasmInstance.exports.tuner_capture_get_state() === 0) {
-              stream.getTracks().forEach((track) => track.stop());
-              void context.close().catch(() => {});
-              return;
-            }
-            submitFromRing(memoryForWasm, context, header, samples, capacity);
-            if (captureStarted) setTimeout(drain, 8);
-          };
-          const memoryForWasm = wasmInstance.exports.memory;
-          setState(2);
-          void context.resume().catch(() => {});
-          void drain();
-          document.addEventListener("pointerdown", () => void context.resume().catch(() => {}));
-        } catch (error) {
-          if (stream) stream.getTracks().forEach((track) => track.stop());
-          const denied = error && (error.name === "NotAllowedError" || error.name === "SecurityError");
-          setState(denied ? 3 : 5);
-          console.error("tuner microphone capture failed", error);
-        }
-      }
-
-      WebAssembly.instantiate = async function (...args) {
-        const result = await originalInstantiate.apply(this, args);
-        wasmInstance = result instanceof WebAssembly.Instance ? result : result.instance;
-        return result;
-      };
-
-      globalThis.requestAnimationFrame = function (callback) {
-        if (!captureStarted) void startCapture();
-        return originalRequestAnimationFrame.call(this, callback);
-      };
-    })();
-  </script>
 
   <!-- kngn.js supplies the browser frame driver. -->
   <!-- kngn:inline-module -->
